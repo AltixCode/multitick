@@ -17,8 +17,8 @@ Last updated: (unset)
 | iOS + Android bundle export | ✅ | both bundles exported |
 | CI green on a self-hosted runner | ⬜ | |
 | `check:release` with real identifiers | ⬜ | |
-| Builds, installs, launches on the iOS simulator | ⬜ | |
-| Renders in light **and** dark on device | ✅ | Android only — screenshots 08-dark / 14-at-cap |
+| Builds, installs, launches on the iOS simulator | ✅ | iPhone 17, 2026-09-15 |
+| Renders in light **and** dark on device | ✅ | both platforms |
 | Every feature driven on the Android emulator | ✅ | see Android device pass below |
 | Purchase flow exercised against a real offering | ⬜ | |
 | Ads served under real consent | ⬜ | |
@@ -82,7 +82,31 @@ notification shade), not from the app's own screen.
 All three are the same shape: a green test run said nothing, because the failure
 was in what the OS did with a correctly-made call.
 
+## iOS device pass — 2026-09-15, iPhone 17 simulator
+
+| Claim | Proof |
+|---|---|
+| Launches and renders | home screen reached, app icon correct on springboard |
+| ATT prompt carries our copy | "…Your data is never sold, and Multitick works exactly the same either way." |
+| Ads still serve after ATT is DECLINED | test banner filled with tracking denied — non-personalised, as intended |
+| Three timers, independent | Pomodoro / Tea / Pasta each with their own controls |
+| Wall-clock accuracy across a relaunch | Pomodoro read 15:35 after terminate + relaunch, matching elapsed time |
+| State persists | the cap alert fired after relaunch, so all three timers survived |
+| Free tier caps at three | same alert as Android, Cancel given equal weight |
+| Dark mode | list, settings and paywall all correct |
+| Alert delivered while backgrounded | banner: "HIIT round — Your timer has finished." |
+
+### A fourth defect this pass found
+
+The paywall spun on "Loading price…" forever. It chose between a price and a
+spinner on whether `lifetime` was set, so "still fetching" and "there is nothing
+to fetch" were indistinguishable — on any device where billing is unavailable it
+never resolved. The `offeringsResolved` fix existed in `_template` but Multitick
+had been generated before it and never regenerated. **Sixteen other apps carried
+the same stale copy**; all seventeen were re-rendered and committed together.
+
 ### Still UNKNOWN
 
-- iOS simulator: build, launch, core flow, dark mode.
-- Purchase flow against a real offering, and ads under real consent.
+- Purchase flow against a real offering (needs store products and a sandbox account).
+- Ads under real consent in the EEA (needs a published UMP message).
+- Interstitial and rewarded formats — only the banner has been seen serving.
