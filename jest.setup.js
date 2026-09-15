@@ -115,3 +115,14 @@ jest.mock('expo-router', () => {
     useFocusEffect: (cb) => React.useEffect(() => cb(), []),
   };
 });
+
+// The notifications module is native-only. The contract these tests care about is which calls
+// are made and what happens when they fail, so a jest.fn surface is exactly right.
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn(),
+  scheduleNotificationAsync: jest.fn(),
+  cancelScheduledNotificationAsync: jest.fn(),
+  setNotificationHandler: jest.fn(),
+  SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
+}));
