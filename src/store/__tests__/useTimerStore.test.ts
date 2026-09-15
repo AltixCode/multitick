@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { FREE_TIMERS, TIMER_CACHE_KEY, useTimerStore } from '../useTimerStore';
 import { resetPermissionCacheForTests } from '@/services/notifications';
 import { statusOf } from '@/logic/timers';
+import { t } from '@/i18n';
 
 const mocked = Notifications as jest.Mocked<typeof Notifications>;
 const initial = useTimerStore.getState();
@@ -186,5 +187,22 @@ describe('persistence', () => {
     );
     await S().hydrate();
     expect(S().timers).toHaveLength(1);
+  });
+});
+
+describe('the alert a started timer schedules', () => {
+  it('carries a body saying the timer is done, not an empty string', async () => {
+    // The emulator shade showed the alert as the bare word "Pasta" — a label with no
+    // statement. A notification whose whole content is the timer's name does not tell the
+    // user the thing they were waiting for has actually happened.
+    const store = useTimerStore.getState();
+    store.add('Pasta', 120_000, false);
+    const id = useTimerStore.getState().timers[0]!.id;
+    await useTimerStore.getState().start(id);
+
+    const call = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls[0]![0];
+    expect(call.content.title).toBe('Pasta');
+    expect(call.content.body).toBe(t('timerAlertBody'));
+    expect(call.content.body.length).toBeGreaterThan(0);
   });
 });

@@ -1,6 +1,8 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 import {
+  ALERT_CHANNEL_ID,
   cancelAlert,
   ensurePermission,
   resetPermissionCacheForTests,
@@ -103,5 +105,55 @@ describe('cancelAlert', () => {
   it('swallows a failure — there is nothing to undo either way', async () => {
     mocked.cancelScheduledNotificationAsync.mockRejectedValue(new Error('gone'));
     await expect(cancelAlert('notif-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('the alert channel — a timer that finishes silently has not finished', () => {
+  // Channels are an Android concept; on iOS the sound comes from the notification itself.
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
+  });
+
+  it('is not created on iOS, which has no such concept', async () => {
+    Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
+    await scheduleAlert('Pasta', 'Time is up', 60_000, 0);
+    expect(mocked.setNotificationChannelAsync).not.toHaveBeenCalled();
+  });
+
+  it('creates a high-importance channel with sound before scheduling', async () => {
+    // The device proved this: with no channel of our own, Android filed the alert under
+    // `expo_notifications_fallback_notification_channel` with `sound=null`. A cooking timer
+    // that expires without a noise is indistinguishable from one that never fired.
+    await scheduleAlert('Pasta', 'Time is up', 60_000, 0);
+    expect(mocked.setNotificationChannelAsync).toHaveBeenCalledWith(
+      ALERT_CHANNEL_ID,
+      expect.objectContaining({
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'default',
+      }),
+    );
+  });
+
+  it('files the notification on that channel', async () => {
+    await scheduleAlert('Pasta', 'Time is up', 60_000, 0);
+    expect(mocked.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: expect.objectContaining({ channelId: ALERT_CHANNEL_ID }),
+      }),
+    );
+  });
+
+  it('creates the channel once, not on every timer started', async () => {
+    await scheduleAlert('A', 'x', 60_000, 0);
+    await scheduleAlert('B', 'x', 60_000, 0);
+    expect(mocked.setNotificationChannelAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('still schedules when the channel cannot be created', async () => {
+    mocked.setNotificationChannelAsync.mockRejectedValue(new Error('no channels here'));
+    expect(await scheduleAlert('Pasta', 'Time is up', 60_000, 0)).toBe('notif-1');
   });
 });

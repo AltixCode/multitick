@@ -80,6 +80,8 @@ const config: ExpoConfig = {
       'com.android.vending.BILLING',
       'android.permission.INTERNET',
       'android.permission.VIBRATE',
+      'android.permission.USE_EXACT_ALARM',
+      'android.permission.SCHEDULE_EXACT_ALARM',
     ],
     blockedPermissions: ['android.permission.ACCESS_COARSE_LOCATION'],
   },

@@ -19,6 +19,7 @@ import {
   statusOf,
   type Timer,
 } from '@/logic/timers';
+import { t } from '@/i18n';
 import { cancelAlert, scheduleAlert } from '@/services/notifications';
 
 export const TIMER_CACHE_KEY = 'multitick.state.v1';
@@ -101,7 +102,7 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     await cancelAlert(timer.notificationId);
     const notificationId = await scheduleAlert(
       running.label,
-      '',
+      t('timerAlertBody'),
       running.endsAt,
       now,
     );

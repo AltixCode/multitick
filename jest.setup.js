@@ -124,5 +124,9 @@ jest.mock('expo-notifications', () => ({
   scheduleNotificationAsync: jest.fn(),
   cancelScheduledNotificationAsync: jest.fn(),
   setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
   SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
+  // Mirrors the real enum. MAX is what gets a heads-up alert with sound; DEFAULT does not
+  // reliably make a noise, which is the whole point of a timer alert.
+  AndroidImportance: { MIN: 1, LOW: 2, DEFAULT: 3, HIGH: 4, MAX: 5 },
 }));

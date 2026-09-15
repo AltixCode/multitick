@@ -11,13 +11,50 @@
  * perfectly good visible countdown; refusing to run without permission would break the app over
  * a feature the user deliberately turned off.
  */
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+
+/**
+ * The channel every timer alert is filed under.
+ *
+ * Android ignores a notification's own importance and sound once a channel exists, so the
+ * channel — not the notification — is what decides whether a finished timer makes a noise.
+ * Left to itself expo files alerts under `expo_notifications_fallback_notification_channel`,
+ * which the emulator showed posting with `sound=null`: a timer that expires in silence.
+ */
+export const ALERT_CHANNEL_ID = 'timer-alerts';
 
 /** Whether the OS will actually deliver anything. Cached after the first ask. */
 let granted: boolean | null = null;
+/** Channels are permanent once created; creating one per timer start is pure waste. */
+let channelReady = false;
 
 export function resetPermissionCacheForTests(): void {
   granted = null;
+  channelReady = false;
+}
+
+/**
+ * Creates the alert channel, once.
+ *
+ * Fails soft for the same reason everything else here does: a missing channel costs the alert
+ * its sound, which is worth far less than the countdown it would take down with it.
+ */
+async function ensureChannel(): Promise<void> {
+  if (channelReady || Platform.OS !== 'android') return;
+  try {
+    await Notifications.setNotificationChannelAsync(ALERT_CHANNEL_ID, {
+      name: 'Timer alerts',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      vibrationPattern: [0, 250, 250, 250],
+      enableVibrate: true,
+      bypassDnd: false,
+    });
+    channelReady = true;
+  } catch {
+    // No channel: the alert still arrives, just quietly.
+  }
 }
 
 /**
@@ -64,10 +101,18 @@ export async function scheduleAlert(
   // others; neither is what a finished timer wants.
   if (!Number.isFinite(seconds) || seconds <= 0) return null;
   if (!(await ensurePermission())) return null;
+  await ensureChannel();
   try {
     return await Notifications.scheduleNotificationAsync({
       content: { title: label, body, sound: true },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, repeats: false },
+      // channelId belongs to the trigger, not the content: it is the delivery channel, and on
+      // Android the channel — not the content — decides importance and sound.
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds,
+        repeats: false,
+        channelId: ALERT_CHANNEL_ID,
+      },
     });
   } catch {
     return null;
