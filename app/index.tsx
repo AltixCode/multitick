@@ -17,6 +17,7 @@ import { ensurePermission } from '@/services/notifications';
 import { BUILT_IN_PRESETS, useTimerStore } from '@/store/useTimerStore';
 import { usePremiumStore } from '@/store/usePremiumStore';
 import { MIN_TOUCH_TARGET, useTheme, withAlpha } from '@/theme';
+import { useTabletColumn } from '@/theme/useTabletColumn';
 
 /** Preset id -> its label key. Explicit, so a new preset cannot ship untranslated. */
 const PRESET_KEY: Record<string, TranslationKey> = {
@@ -40,6 +41,7 @@ export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, spacing, radius } = useTheme();
+  const tabletColumn = useTabletColumn();
 
   const timers = useTimerStore((s) => s.timers);
   const announced = useTimerStore((s) => s.announced);
@@ -168,6 +170,7 @@ export default function Home() {
           paddingHorizontal: spacing.base,
           paddingBottom: spacing.xl,
           gap: spacing.base,
+          ...tabletColumn,
         }}
         showsVerticalScrollIndicator={false}
       >
