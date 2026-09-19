@@ -1,0 +1,35 @@
+{
+  "identifier": "EC59C3AE-BA5F-4359-BBC9-CD948A642102",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "F66E9893-A382-4343-82B3-DBA72C279A19",
+      "localizations": [
+        {
+          "description": "multitick remove ads lifetime unlock",
+          "displayName": "multitick remove ads",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.altixcode.multitick.removeads",
+      "referenceName": "multitick remove ads",
+      "type": "NonConsumable"
+    }
+  ],
+  "settings": {
+    "_applicationInternalID": "",
+    "_developerTeamID": "",
+    "_failTransactionsEnabled": false,
+    "_lastSynchronizedDate": 0,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 4,
+    "minor": 0
+  }
+}
