@@ -1,32 +1,42 @@
-import Feather from '@expo/vector-icons/Feather';
-import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Feather from "@expo/vector-icons/Feather";
+import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  AppState,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BannerAdSlot } from '@/components/BannerAdSlot';
-import { TimerCard } from '@/components/TimerCard';
-import { Button, Text } from '@/components/ui';
-import { t, type TranslationKey } from '@/i18n';
-import { parseDuration, statusOf } from '@/logic/timers';
-import { shouldShowInterstitial } from '@/monetization/adPolicy';
-import { shouldShowAds } from '@/monetization/entitlements';
-import { showInterstitial } from '@/monetization/interstitial';
-import { ensurePermission } from '@/services/notifications';
-import { BUILT_IN_PRESETS, useTimerStore } from '@/store/useTimerStore';
-import { usePremiumStore } from '@/store/usePremiumStore';
-import { MIN_TOUCH_TARGET, useTheme, withAlpha } from '@/theme';
-import { useTabletColumn } from '@/theme/useTabletColumn';
+import { BannerAdSlot } from "@/components/BannerAdSlot";
+import { TimerCard } from "@/components/TimerCard";
+import { Button, Text } from "@/components/ui";
+import { t, type TranslationKey } from "@/i18n";
+import { parseDuration, statusOf } from "@/logic/timers";
+import { shouldShowInterstitial } from "@/monetization/adPolicy";
+import { shouldShowAds } from "@/monetization/entitlements";
+import { showInterstitial } from "@/monetization/interstitial";
+import { ensurePermission } from "@/services/notifications";
+import { useSoundEffects } from "@/hooks/useSoundEffects";
+import { BUILT_IN_PRESETS, useTimerStore } from "@/store/useTimerStore";
+import { usePremiumStore } from "@/store/usePremiumStore";
+import { MIN_TOUCH_TARGET, useTheme, withAlpha } from "@/theme";
+import { useTabletColumn } from "@/theme/useTabletColumn";
 
 /** Preset id -> its label key. Explicit, so a new preset cannot ship untranslated. */
 const PRESET_KEY: Record<string, TranslationKey> = {
-  pomodoro: 'presetPomodoro',
-  shortBreak: 'presetShortBreak',
-  pasta: 'presetPasta',
-  egg: 'presetEgg',
-  tea: 'presetTea',
-  hiit: 'presetHiit',
+  pomodoro: "presetPomodoro",
+  shortBreak: "presetShortBreak",
+  pasta: "presetPasta",
+  egg: "presetEgg",
+  tea: "presetTea",
+  hiit: "presetHiit",
 };
 
 /**
@@ -57,13 +67,14 @@ export default function Home() {
   const isReady = usePremiumStore((s) => s.isReady);
 
   const [now, setNow] = useState(() => Date.now());
-  const [label, setLabel] = useState('');
-  const [duration, setDuration] = useState('');
+  const [label, setLabel] = useState("");
+  const [duration, setDuration] = useState("");
   const [invalid, setInvalid] = useState(false);
   const [notificationsOff, setNotificationsOff] = useState(false);
 
   const completed = useRef(0);
   const lastInterstitialAt = useRef(0);
+  const playSound = useSoundEffects();
 
   useEffect(() => {
     void hydrate();
@@ -71,7 +82,7 @@ export default function Home() {
   }, [hydrate]);
 
   // One ticker for the whole list, running only while something needs it.
-  const anyRunning = timers.some((timer) => statusOf(timer, now) === 'running');
+  const anyRunning = timers.some((timer) => statusOf(timer, now) === "running");
   useEffect(() => {
     if (!anyRunning) return;
     const id = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -81,22 +92,27 @@ export default function Home() {
   // Coming back from the background: resync immediately rather than waiting for a tick, so the
   // first frame after a return is already correct.
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') setNow(Date.now());
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setNow(Date.now());
     });
     return () => sub.remove();
   }, []);
 
-  // A finish is announced once. The notification has already fired if the app was away; this is
-  // only the in-app acknowledgement.
+  // A finish is announced once. The scheduled notification covers the app being away; this is
+  // the in-app acknowledgement for exactly the case a tester reported -- watching the countdown
+  // when it hits zero. A direct tone here does not depend on the OS's foreground-notification
+  // presentation rules (which, without a handler, show and play nothing) or on the user having
+  // granted notification permission at all.
   useEffect(() => {
     for (const timer of timers) {
-      if (statusOf(timer, now) !== 'finished' || announced.includes(timer.id)) continue;
+      if (statusOf(timer, now) !== "finished" || announced.includes(timer.id))
+        continue;
       markAnnounced(timer.id);
       completed.current += 1;
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playSound("success");
     }
-  }, [timers, now, announced, markAnnounced]);
+  }, [timers, now, announced, markAnnounced, playSound]);
 
   const submit = () => {
     const ms = parseDuration(duration);
@@ -104,33 +120,37 @@ export default function Home() {
       setInvalid(true);
       return;
     }
-    const outcome = add(label.trim() || t('addTimerLabel'), ms, isPremium);
-    if (outcome === 'limit-reached') {
-      Alert.alert(t('timerLimitTitle'), t('timerLimitBody'), [
-        { text: t('cancel'), style: 'cancel' },
-        { text: t('removeAdsCta'), onPress: () => router.push('/paywall') },
+    const outcome = add(label.trim() || t("addTimerLabel"), ms, isPremium);
+    if (outcome === "limit-reached") {
+      Alert.alert(t("timerLimitTitle"), t("timerLimitBody"), [
+        { text: t("cancel"), style: "cancel" },
+        { text: t("removeAdsCta"), onPress: () => router.push("/paywall") },
       ]);
       return;
     }
-    if (outcome === 'invalid') {
+    if (outcome === "invalid") {
       setInvalid(true);
       return;
     }
     setInvalid(false);
-    setLabel('');
-    setDuration('');
+    setLabel("");
+    setDuration("");
   };
 
   const fromPreset = (id: string, durationMs: number) => {
-    const outcome = add(t(PRESET_KEY[id] ?? 'addTimerLabel'), durationMs, isPremium);
-    if (outcome === 'limit-reached') {
-      Alert.alert(t('timerLimitTitle'), t('timerLimitBody'), [
-        { text: t('cancel'), style: 'cancel' },
-        { text: t('removeAdsCta'), onPress: () => router.push('/paywall') },
+    const outcome = add(
+      t(PRESET_KEY[id] ?? "addTimerLabel"),
+      durationMs,
+      isPremium,
+    );
+    if (outcome === "limit-reached") {
+      Alert.alert(t("timerLimitTitle"), t("timerLimitBody"), [
+        { text: t("cancel"), style: "cancel" },
+        { text: t("removeAdsCta"), onPress: () => router.push("/paywall") },
       ]);
       return;
     }
-    if (typeof outcome === 'object') void startTimer(outcome.id);
+    if (typeof outcome === "object") void startTimer(outcome.id);
   };
 
   /**
@@ -176,12 +196,12 @@ export default function Home() {
       >
         <View style={styles.titleRow}>
           <Text variant="title" style={styles.grow}>
-            {t('appName')}
+            {t("appName")}
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t('settingsTitle')}
-            onPress={() => router.push('/settings')}
+            accessibilityLabel={t("settingsTitle")}
+            onPress={() => router.push("/settings")}
             hitSlop={8}
             style={styles.iconSlot}
           >
@@ -190,14 +210,27 @@ export default function Home() {
         </View>
 
         {notificationsOff ? (
-          <Text variant="caption" tone="muted">
-            {t('notificationsOff')}
-          </Text>
+          <View style={{ gap: spacing.xs }}>
+            <Text variant="caption" tone="muted">
+              {t("notificationsOff")}
+            </Text>
+            {/* Once denied, the OS will not show its own permission prompt again -- the only
+                way back is the app's own Settings page, which this deep-links to directly. */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void Linking.openSettings()}
+              hitSlop={8}
+            >
+              <Text variant="caption" tone="accent">
+                {t("openSettingsCta")}
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
 
         {timers.length === 0 ? (
           <Text variant="body" tone="muted">
-            {t('noTimers')}
+            {t("noTimers")}
           </Text>
         ) : (
           timers.map((timer) => (
@@ -217,52 +250,77 @@ export default function Home() {
           <TextInput
             value={label}
             onChangeText={setLabel}
-            placeholder={t('timerNameLabel')}
+            placeholder={t("timerNameLabel")}
             placeholderTextColor={colors.textFaint}
-            accessibilityLabel={t('timerNameLabel')}
-            style={[styles.input, styles.grow, { color: colors.text, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md }]}
+            accessibilityLabel={t("timerNameLabel")}
+            style={[
+              styles.input,
+              styles.grow,
+              {
+                color: colors.text,
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: spacing.md,
+              },
+            ]}
           />
           <TextInput
             value={duration}
             onChangeText={setDuration}
             onSubmitEditing={submit}
             keyboardType="numbers-and-punctuation"
-            placeholder={t('durationHint')}
+            placeholder={t("durationHint")}
             placeholderTextColor={colors.textFaint}
-            accessibilityLabel={t('durationLabel')}
-            style={[styles.input, styles.duration, { color: colors.text, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md }]}
+            accessibilityLabel={t("durationLabel")}
+            style={[
+              styles.input,
+              styles.duration,
+              {
+                color: colors.text,
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: spacing.md,
+              },
+            ]}
           />
         </View>
 
         {invalid ? (
           <Text variant="caption" tone="danger">
-            {t('invalidDuration')}
+            {t("invalidDuration")}
           </Text>
         ) : null}
 
-        <Button label={t('addTimerLabel')} icon="plus" fullWidth onPress={submit} />
+        <Button
+          label={t("addTimerLabel")}
+          icon="plus"
+          fullWidth
+          onPress={submit}
+        />
 
         <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
           <Text variant="micro" tone="faint">
-            {t('presetsTitle').toUpperCase()}
+            {t("presetsTitle").toUpperCase()}
           </Text>
           <View style={[styles.chips, { gap: spacing.sm }]}>
             {BUILT_IN_PRESETS.map((preset) => (
               <Pressable
                 key={preset.id}
                 accessibilityRole="button"
-                accessibilityLabel={t(PRESET_KEY[preset.id] ?? 'addTimerLabel')}
+                accessibilityLabel={t(PRESET_KEY[preset.id] ?? "addTimerLabel")}
                 onPress={() => fromPreset(preset.id, preset.durationMs)}
                 android_ripple={{ color: withAlpha(colors.accent, 0.16) }}
                 style={{
                   minHeight: MIN_TOUCH_TARGET,
-                  justifyContent: 'center',
+                  justifyContent: "center",
                   paddingHorizontal: spacing.base,
                   borderRadius: radius.full,
                   backgroundColor: colors.surfaceAlt,
                 }}
               >
-                <Text variant="caption">{t(PRESET_KEY[preset.id] ?? 'addTimerLabel')}</Text>
+                <Text variant="caption">
+                  {t(PRESET_KEY[preset.id] ?? "addTimerLabel")}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -274,11 +332,16 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  titleRow: { flexDirection: 'row', alignItems: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  chips: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  titleRow: { flexDirection: "row", alignItems: "center" },
+  row: { flexDirection: "row", alignItems: "center" },
+  chips: { flexDirection: "row", alignItems: "center", flexWrap: "wrap" },
   grow: { flex: 1 },
   input: { minHeight: MIN_TOUCH_TARGET, fontSize: 16 },
   duration: { width: 120 },
-  iconSlot: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' },
+  iconSlot: {
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
